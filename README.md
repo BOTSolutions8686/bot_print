@@ -13,9 +13,10 @@ On **Sales Invoice** (Currency and Price List area):
 | Field | Purpose |
 |--------|--------|
 | **PDF Display Currency** | e.g. USD |
-| **PDF Display Amount** | Manual amount the client wants on the PDF |
+| **PDF Display VAT Amount** | Manual VAT for the PDF |
+| **PDF Display Total Amount** | Manual total for the PDF |
 
-If either field is empty, the Multi Currency PDF is unchanged.
+If currency and both amounts are empty, the Multi Currency PDF is unchanged.
 
 On migrate, the app appends a print block to any Sales Invoice print format whose name contains `Multiple Currency` or `Multi Currency` (Zhengmao: **Zhengmao Multiple Currency**).
 
@@ -41,7 +42,7 @@ print(inject_pdf_display_block("Zhengmao Multiple Currency"))
 ## How users print
 
 1. Keep invoice **Currency = SAR**.
-2. Fill **PDF Display Currency = USD** and **PDF Display Amount**.
+2. Fill **PDF Display Currency**, **PDF Display VAT Amount**, and **PDF Display Total Amount**.
 3. Print with **Zhengmao Multiple Currency**.
 
 ## License

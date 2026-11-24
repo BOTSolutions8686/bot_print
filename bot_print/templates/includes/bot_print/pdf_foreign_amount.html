@@ -1,18 +1,44 @@
-{%- if doc.get('custom_pdf_display_currency') and doc.get('custom_pdf_display_amount') -%}
-<table class="bot-print-pdf-foreign" style="width:100%; border-collapse:collapse; margin-top:8px; font-size:12px;">
+{%- set pdf_ccy = (doc.get('custom_pdf_display_currency') or '')|trim -%}
+{%- set pdf_vat = doc.get('custom_pdf_display_vat_amount') -%}
+{%- set pdf_total = doc.get('custom_pdf_display_amount') -%}
+{%- if pdf_ccy and (pdf_vat or pdf_total) -%}
+<table class="seller_table" style="width:100%; margin-top:8px;">
 	<tr>
-		<td style="border:1px solid #000; padding:6px; font-weight:bold;">
-			Amount in {{ doc.custom_pdf_display_currency }}
-			<br>
-			المبلغ بعملة {{ doc.custom_pdf_display_currency }}
-		</td>
-		<td style="border:1px solid #000; padding:6px; text-align:right; font-weight:bold; white-space:nowrap;">
-			{{ "{:,.2f}".format(doc.custom_pdf_display_amount|float) }}
-			{{ doc.custom_pdf_display_currency }}
-		</td>
+		<th colspan="2" class="color_bg_gray" style="font-weight:bold;">
+			Amounts in {{ pdf_ccy }} (display only)
+		</th>
+		<th colspan="2" class="color_bg_gray text-right" style="font-weight:bold;">
+			المبالغ بعملة {{ pdf_ccy }} (للعرض فقط)
+		</th>
 	</tr>
+	{%- if pdf_vat -%}
+	<tr>
+		<th colspan="2" class="color_black inc_size" style="font-weight:bold;">
+			VAT Amount ({{ pdf_ccy }})
+		</th>
+		<th class="inc_size text-right" style="font-weight:bold;">
+			ضريبة القيمة المضافة ({{ pdf_ccy }})
+		</th>
+		<th class="color_black inc_size text-right">
+			<strong>{{ "{:,.2f}".format(pdf_vat|float) }} {{ pdf_ccy }}</strong>
+		</th>
+	</tr>
+	{%- endif -%}
+	{%- if pdf_total -%}
+	<tr>
+		<th colspan="2" class="color_black inc_size" style="font-weight:bold;">
+			Total Amount ({{ pdf_ccy }})
+		</th>
+		<th class="inc_size text-right" style="font-weight:bold;">
+			المبلغ الإجمالي ({{ pdf_ccy }})
+		</th>
+		<th class="color_black inc_size text-right">
+			<strong>{{ "{:,.2f}".format(pdf_total|float) }} {{ pdf_ccy }}</strong>
+		</th>
+	</tr>
+	{%- endif -%}
 </table>
-<p style="font-size:10px; margin:4px 0 0 0;">
-	Invoice currency remains {{ doc.currency }}. This {{ doc.custom_pdf_display_currency }} amount is for display only.
+<p style="font-size:10px; margin:4px 0 8px 0;">
+	Invoice currency remains {{ doc.currency }}. {{ pdf_ccy }} figures are for print display only.
 </p>
 {%- endif -%}
