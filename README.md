@@ -2,21 +2,21 @@
 
 Reusable ERPNext print extras for BOT Solutions sites.
 
-First use: **Zhengmao** (`zhengmao.metadaftr.com`) — SAR invoice stays SAR for ZATCA; Multi Currency PDF can show a **manual** USD (or other) amount at the bottom.
+First use: **Zhengmao** (`zhengmao.metadaftr.com`) — SAR invoice stays SAR for ZATCA; Multi Currency PDF can show USD (or other) amounts on the last two tax rows. Amounts are filled from SAR totals using the Currency Exchange rate (USD/SAR falls back to 3.75).
 
 This does **not** change invoice calculations, GL, or ZATCA XML.
 
 ## What it adds
 
-On **Sales Invoice** (Currency and Price List area):
+On **Sales Invoice**, collapsible section **PDF Foreign Amount (Print only)** (below Currency and Price List):
 
 | Field | Purpose |
 |--------|--------|
-| **PDF Display Currency** | e.g. USD |
-| **PDF Display VAT Amount** | Manual VAT for the PDF |
-| **PDF Display Total Amount** | Manual total for the PDF |
+| **PDF Display Currency** | e.g. USD. Leave empty to keep SAR on the PDF. |
+| **PDF Display VAT Amount** | Auto-filled (SAR VAT ÷ rate). Can override. |
+| **PDF Display Taxable Amount** | Auto-filled (SAR taxable ÷ rate). Can override. |
 
-If currency and both amounts are empty, those two rows stay SAR (`ريال`).
+If currency is empty, those two rows stay SAR (`ريال`).
 
 On migrate, the app patches the bottom tax rows (`القيمة الخاضعة للضريبة` / VAT 15%) on print formats named `Multiple Currency` or `Multi Currency`. SAR totals above that stay SAR. No extra table is added.
 
@@ -42,7 +42,7 @@ print(inject_pdf_display_block("Zhengmao Multiple Currency"))
 ## How users print
 
 1. Keep invoice **Currency = SAR**.
-2. Fill **PDF Display Currency**, **PDF Display VAT Amount**, and **PDF Display Taxable Amount**.
+2. Open **PDF Foreign Amount (Print only)** and set **PDF Display Currency** (e.g. USD). VAT and taxable amounts fill automatically.
 3. Print with **Zhengmao Multiple Currency**. The two bottom tax rows show that currency and amounts; the SAR totals above stay SAR.
 
 ## License

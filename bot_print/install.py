@@ -77,7 +77,14 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
 
 
 def after_migrate():
+	_ensure_pdf_section_collapsible()
 	_patch_multi_currency_formats()
+
+
+def _ensure_pdf_section_collapsible():
+	name = "Sales Invoice-custom_pdf_display_section"
+	if frappe.db.exists("Custom Field", name):
+		frappe.db.set_value("Custom Field", name, "collapsible", 1, update_modified=False)
 
 
 def _patch_multi_currency_formats():

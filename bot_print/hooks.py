@@ -27,6 +27,12 @@ fixtures = [
 
 after_migrate = ["bot_print.install.after_migrate"]
 
+doc_events = {
+	"Sales Invoice": {
+		"validate": "bot_print.sales_invoice.set_pdf_foreign_amounts",
+	},
+}
+
 doctype_js = {
 	"Sales Invoice": "public/js/sales_invoice.js",
 }
