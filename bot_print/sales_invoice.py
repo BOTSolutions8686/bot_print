@@ -55,14 +55,21 @@ def calculate_pdf_display_amounts(
 
 
 def _company_per_display_rate(display_ccy, company_ccy, posting_date):
+	"""SAR per 1 USD so PDF USD = SAR / rate. Uses Currency Exchange if present."""
 	if display_ccy == company_ccy:
 		return 1.0
 
-	rate = _lookup_currency_exchange(display_ccy, company_ccy, posting_date)
-	if rate:
-		return rate
+	row = _get_exchange_row(display_ccy, company_ccy, posting_date) or _get_exchange_row(
+		company_ccy, display_ccy, posting_date
+	)
+	if row and flt(row.get("exchange_rate")):
+		quoted = flt(row.get("exchange_rate"))
+		# This site stores SAR→USD as 3.75 (peg). Use 3.75 as SAR per 1 USD.
+		# A correct 1 SAR = 0.2667 USD is inverted to the same peg.
+		if quoted >= 1:
+			return quoted
+		return flt(1.0 / quoted, 9)
 
-	# Do not call erpnext get_exchange_rate: it throws if no Currency Exchange exists.
 	if display_ccy == "USD" and company_ccy == "SAR":
 		return USD_SAR_PEG
 	if display_ccy == "SAR" and company_ccy == "USD":
@@ -71,37 +78,27 @@ def _company_per_display_rate(display_ccy, company_ccy, posting_date):
 	return 0.0
 
 
-def _lookup_currency_exchange(from_currency, to_currency, transaction_date):
+def _get_exchange_row(from_currency, to_currency, transaction_date):
 	if not from_currency or not to_currency:
-		return 0.0
+		return None
 
+	filters = {"from_currency": from_currency, "to_currency": to_currency}
 	date = transaction_date or nowdate()
 	rows = frappe.get_all(
 		"Currency Exchange",
-		filters={
-			"from_currency": from_currency,
-			"to_currency": to_currency,
-			"date": ["<=", date],
-		},
-		fields=["exchange_rate"],
+		filters={**filters, "date": ["<=", date]},
+		fields=["from_currency", "to_currency", "exchange_rate", "date"],
 		order_by="date desc",
 		limit=1,
 	)
-	if rows and flt(rows[0].exchange_rate):
-		return flt(rows[0].exchange_rate)
+	if rows:
+		return rows[0]
 
-	reverse = frappe.get_all(
+	rows = frappe.get_all(
 		"Currency Exchange",
-		filters={
-			"from_currency": to_currency,
-			"to_currency": from_currency,
-			"date": ["<=", date],
-		},
-		fields=["exchange_rate"],
+		filters=filters,
+		fields=["from_currency", "to_currency", "exchange_rate", "date"],
 		order_by="date desc",
 		limit=1,
 	)
-	if reverse and flt(reverse[0].exchange_rate):
-		return flt(1.0 / flt(reverse[0].exchange_rate), 9)
-
-	return 0.0
+	return rows[0] if rows else None
