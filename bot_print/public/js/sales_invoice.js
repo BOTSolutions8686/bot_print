@@ -8,7 +8,7 @@ frappe.ui.form.on("Sales Invoice", {
 		set_pdf_foreign_amounts(frm);
 	},
 	custom_pdf_display_currency(frm) {
-		set_pdf_foreign_amounts(frm);
+		set_pdf_foreign_amounts(frm, true);
 	},
 	posting_date(frm) {
 		set_pdf_foreign_amounts(frm);
@@ -29,9 +29,15 @@ frappe.ui.form.on("Sales Invoice", {
 
 let _pdf_amt_timer;
 
-function set_pdf_foreign_amounts(frm) {
+function set_pdf_foreign_amounts(frm, force) {
 	const ccy = (frm.doc.custom_pdf_display_currency || "").trim();
 	if (!ccy || !frm.doc.company) {
+		return;
+	}
+
+	const has_amounts =
+		flt(frm.doc.custom_pdf_display_amount) || flt(frm.doc.custom_pdf_display_vat_amount);
+	if (!force && has_amounts) {
 		return;
 	}
 
@@ -50,8 +56,12 @@ function set_pdf_foreign_amounts(frm) {
 				if (!r.message) {
 					return;
 				}
-				frm.set_value("custom_pdf_display_amount", r.message.taxable);
-				frm.set_value("custom_pdf_display_vat_amount", r.message.vat);
+				if (flt(frm.doc.custom_pdf_display_amount) !== flt(r.message.taxable)) {
+					frm.set_value("custom_pdf_display_amount", r.message.taxable);
+				}
+				if (flt(frm.doc.custom_pdf_display_vat_amount) !== flt(r.message.vat)) {
+					frm.set_value("custom_pdf_display_vat_amount", r.message.vat);
+				}
 			},
 		});
 	}, 300);

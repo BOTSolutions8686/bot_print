@@ -9,6 +9,10 @@ def set_pdf_foreign_amounts(doc, method=None):
 	if not ccy:
 		return
 
+	# Keep figures the client already typed. Fill only when empty / 0.
+	if flt(doc.get("custom_pdf_display_amount")) or flt(doc.get("custom_pdf_display_vat_amount")):
+		return
+
 	amounts = calculate_pdf_display_amounts(
 		doc.get("company"),
 		doc.get("posting_date"),

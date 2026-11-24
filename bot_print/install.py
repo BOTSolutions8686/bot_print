@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import flt, nowdate
 
 INCLUDE_MARKER = "<!-- BOT_PRINT_PDF_DISPLAY -->"
 INCLUDE = '{% include "templates/includes/bot_print/pdf_foreign_amount.html" ignore missing %}'
@@ -78,6 +79,7 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
 
 def after_migrate():
 	_ensure_pdf_section_collapsible()
+	_ensure_usd_sar_currency_exchange()
 	_patch_multi_currency_formats()
 
 
@@ -85,6 +87,45 @@ def _ensure_pdf_section_collapsible():
 	name = "Sales Invoice-custom_pdf_display_section"
 	if frappe.db.exists("Custom Field", name):
 		frappe.db.set_value("Custom Field", name, "collapsible", 1, update_modified=False)
+
+
+def _ensure_usd_sar_currency_exchange():
+	"""ERPNext looks up USD→SAR (Price List). Site only had SAR→USD 3.75, so it threw."""
+	if not frappe.db.exists("DocType", "Currency Exchange"):
+		return
+
+	today = nowdate()
+	if frappe.db.exists(
+		"Currency Exchange",
+		{"from_currency": "USD", "to_currency": "SAR", "date": today},
+	):
+		return
+
+	src = frappe.get_all(
+		"Currency Exchange",
+		filters={"from_currency": "SAR", "to_currency": "USD"},
+		fields=["exchange_rate"],
+		order_by="date desc",
+		limit=1,
+	)
+	quoted = flt(src[0].exchange_rate) if src else 3.75
+	rate = quoted if quoted >= 1 else flt(1.0 / quoted, 9)
+	if not rate:
+		rate = 3.75
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Currency Exchange",
+			"date": today,
+			"from_currency": "USD",
+			"to_currency": "SAR",
+			"exchange_rate": rate,
+			"for_buying": 1,
+			"for_selling": 1,
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
 
 
 def _patch_multi_currency_formats():
