@@ -1,42 +1,51 @@
 import frappe
 from frappe.utils import flt, nowdate
 
-USD_SAR_PEG = 3.75
-
 
 def set_pdf_foreign_amounts(doc, method=None):
 	ccy = (doc.get("custom_pdf_display_currency") or "").strip()
 	if not ccy:
 		return
 
-	# Keep figures the client already typed. Fill only when empty / 0.
-	if flt(doc.get("custom_pdf_display_amount")) or flt(doc.get("custom_pdf_display_vat_amount")):
-		return
-
-	amounts = calculate_pdf_display_amounts(
-		doc.get("company"),
-		doc.get("posting_date"),
-		ccy,
-		doc.get("base_total") or 0,
-		doc.get("base_total_taxes_and_charges") or 0,
-		doc.get("company_currency"),
+	company_ccy = doc.get("company_currency") or frappe.get_cached_value(
+		"Company", doc.company, "default_currency"
 	)
-	if not amounts:
+	rate = flt(doc.get("custom_pdf_display_exchange_rate"))
+	if not rate:
+		rate = lookup_pdf_exchange_rate(ccy, company_ccy, doc.get("posting_date"))
+		if rate:
+			doc.custom_pdf_display_exchange_rate = rate
+
+	if not rate:
 		return
 
-	doc.custom_pdf_display_amount = amounts["taxable"]
-	doc.custom_pdf_display_vat_amount = amounts["vat"]
+	doc.custom_pdf_display_amount = flt((doc.get("base_total") or 0) / rate, 2)
+	doc.custom_pdf_display_vat_amount = flt(
+		(doc.get("base_total_taxes_and_charges") or 0) / rate, 2
+	)
 
 
 @frappe.whitelist()
-def get_pdf_display_amounts(company, posting_date, display_currency, base_total, base_vat):
-	return calculate_pdf_display_amounts(
-		company, posting_date, display_currency, base_total, base_vat
+def get_pdf_exchange_rate(company, posting_date, display_currency, company_currency=None):
+	display = (display_currency or "").strip()
+	if not display or not company:
+		return 0
+
+	company_ccy = company_currency or frappe.get_cached_value(
+		"Company", company, "default_currency"
 	)
+	return lookup_pdf_exchange_rate(display, company_ccy, posting_date)
 
 
-def calculate_pdf_display_amounts(
-	company, posting_date, display_currency, base_total, base_vat, company_currency=None
+@frappe.whitelist()
+def get_pdf_display_amounts(
+	company,
+	posting_date,
+	display_currency,
+	base_total,
+	base_vat,
+	exchange_rate=None,
+	company_currency=None,
 ):
 	display = (display_currency or "").strip()
 	if not display or not company:
@@ -45,41 +54,45 @@ def calculate_pdf_display_amounts(
 	company_ccy = company_currency or frappe.get_cached_value(
 		"Company", company, "default_currency"
 	)
-	taxable = flt(base_total)
-	vat = flt(base_vat)
-	rate = _company_per_display_rate(display, company_ccy, posting_date)
+	rate = flt(exchange_rate)
 	if not rate:
-		return None
+		rate = lookup_pdf_exchange_rate(display, company_ccy, posting_date)
+	if not rate:
+		return {"taxable": 0, "vat": 0, "rate": 0}
 
 	return {
-		"taxable": flt(taxable / rate, 2),
-		"vat": flt(vat / rate, 2),
-		"rate": flt(rate, 6),
+		"taxable": flt(flt(base_total) / rate, 2),
+		"vat": flt(flt(base_vat) / rate, 2),
+		"rate": flt(rate, 9),
 	}
 
 
-def _company_per_display_rate(display_ccy, company_ccy, posting_date):
-	"""SAR per 1 USD so PDF USD = SAR / rate. Uses Currency Exchange if present."""
+def lookup_pdf_exchange_rate(display_ccy, company_ccy, posting_date):
+	"""1 display = [?] company, e.g. 1 USD = 3.75 SAR. No throw if missing."""
+	if not display_ccy or not company_ccy:
+		return 0.0
 	if display_ccy == company_ccy:
 		return 1.0
 
 	row = _get_exchange_row(display_ccy, company_ccy, posting_date) or _get_exchange_row(
 		company_ccy, display_ccy, posting_date
 	)
-	if row and flt(row.get("exchange_rate")):
-		quoted = flt(row.get("exchange_rate"))
-		# This site stores SAR→USD as 3.75 (peg). Use 3.75 as SAR per 1 USD.
-		# A correct 1 SAR = 0.2667 USD is inverted to the same peg.
-		if quoted >= 1:
-			return quoted
-		return flt(1.0 / quoted, 9)
+	if not row or not flt(row.get("exchange_rate")):
+		return 0.0
 
-	if display_ccy == "USD" and company_ccy == "SAR":
-		return USD_SAR_PEG
-	if display_ccy == "SAR" and company_ccy == "USD":
-		return flt(1.0 / USD_SAR_PEG, 9)
+	quoted = flt(row.get("exchange_rate"))
+	from_ccy = row.get("from_currency")
+	to_ccy = row.get("to_currency")
 
-	return 0.0
+	# 1 display = quoted company
+	if from_ccy == display_ccy and to_ccy == company_ccy:
+		return quoted if quoted >= 1 else flt(1.0 / quoted, 9)
+
+	# 1 company = quoted display (this site: SAR→USD 3.75 means 1 USD = 3.75 SAR)
+	if from_ccy == company_ccy and to_ccy == display_ccy:
+		return quoted if quoted >= 1 else flt(1.0 / quoted, 9)
+
+	return quoted if quoted >= 1 else flt(1.0 / quoted, 9)
 
 
 def _get_exchange_row(from_currency, to_currency, transaction_date):

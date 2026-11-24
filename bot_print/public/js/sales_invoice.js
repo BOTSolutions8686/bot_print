@@ -1,67 +1,79 @@
 frappe.ui.form.on("Sales Invoice", {
 	refresh(frm) {
-		frm.set_df_property(
-			"custom_pdf_display_amount",
-			"description",
-			__("Print only. Auto-filled from SAR totals using the display currency rate. Does not change invoice totals or ZATCA XML.")
-		);
-		set_pdf_foreign_amounts(frm);
+		set_pdf_rate_label(frm);
+		fetch_pdf_rate_if_empty(frm);
 	},
 	custom_pdf_display_currency(frm) {
-		set_pdf_foreign_amounts(frm, true);
+		set_pdf_rate_label(frm);
+		fetch_pdf_rate_if_empty(frm, true);
 	},
-	posting_date(frm) {
-		set_pdf_foreign_amounts(frm);
+	custom_pdf_display_exchange_rate(frm) {
+		apply_pdf_amounts_from_rate(frm);
 	},
 	base_total(frm) {
-		set_pdf_foreign_amounts(frm);
-	},
-	base_net_total(frm) {
-		set_pdf_foreign_amounts(frm);
+		apply_pdf_amounts_from_rate(frm);
 	},
 	base_total_taxes_and_charges(frm) {
-		set_pdf_foreign_amounts(frm);
-	},
-	taxes_and_charges(frm) {
-		set_pdf_foreign_amounts(frm);
+		apply_pdf_amounts_from_rate(frm);
 	},
 });
 
-let _pdf_amt_timer;
+let _pdf_rate_timer;
 
-function set_pdf_foreign_amounts(frm, force) {
+function set_pdf_rate_label(frm) {
+	const from_ccy = frm.doc.custom_pdf_display_currency || "USD";
+	const to_ccy = frm.doc.currency || frm.doc.company_currency || "SAR";
+	frm.set_df_property(
+		"custom_pdf_display_exchange_rate",
+		"description",
+		__("1 {0} = [?] {1}. From Currency Exchange if present; you can type freely.", [
+			from_ccy,
+			to_ccy,
+		])
+	);
+}
+
+function apply_pdf_amounts_from_rate(frm) {
+	const rate = flt(frm.doc.custom_pdf_display_exchange_rate);
+	if (!rate || !frm.doc.custom_pdf_display_currency) {
+		return;
+	}
+	const taxable = flt(flt(frm.doc.base_total) / rate, 2);
+	const vat = flt(flt(frm.doc.base_total_taxes_and_charges) / rate, 2);
+	if (flt(frm.doc.custom_pdf_display_amount) !== taxable) {
+		frm.set_value("custom_pdf_display_amount", taxable);
+	}
+	if (flt(frm.doc.custom_pdf_display_vat_amount) !== vat) {
+		frm.set_value("custom_pdf_display_vat_amount", vat);
+	}
+}
+
+function fetch_pdf_rate_if_empty(frm, force) {
 	const ccy = (frm.doc.custom_pdf_display_currency || "").trim();
 	if (!ccy || !frm.doc.company) {
 		return;
 	}
-
-	const has_amounts =
-		flt(frm.doc.custom_pdf_display_amount) || flt(frm.doc.custom_pdf_display_vat_amount);
-	if (!force && has_amounts) {
+	if (!force && flt(frm.doc.custom_pdf_display_exchange_rate)) {
+		apply_pdf_amounts_from_rate(frm);
 		return;
 	}
 
-	clearTimeout(_pdf_amt_timer);
-	_pdf_amt_timer = setTimeout(() => {
+	clearTimeout(_pdf_rate_timer);
+	_pdf_rate_timer = setTimeout(() => {
 		frappe.call({
-			method: "bot_print.sales_invoice.get_pdf_display_amounts",
+			method: "bot_print.sales_invoice.get_pdf_exchange_rate",
 			args: {
 				company: frm.doc.company,
 				posting_date: frm.doc.posting_date,
 				display_currency: ccy,
-				base_total: frm.doc.base_total || 0,
-				base_vat: frm.doc.base_total_taxes_and_charges || 0,
+				company_currency: frm.doc.company_currency,
 			},
 			callback(r) {
-				if (!r.message) {
-					return;
+				const rate = flt(r.message);
+				if (rate) {
+					frm.set_value("custom_pdf_display_exchange_rate", rate);
 				}
-				if (flt(frm.doc.custom_pdf_display_amount) !== flt(r.message.taxable)) {
-					frm.set_value("custom_pdf_display_amount", r.message.taxable);
-				}
-				if (flt(frm.doc.custom_pdf_display_vat_amount) !== flt(r.message.vat)) {
-					frm.set_value("custom_pdf_display_vat_amount", r.message.vat);
-				}
+				apply_pdf_amounts_from_rate(frm);
 			},
 		});
 	}, 300);

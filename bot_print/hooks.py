@@ -17,6 +17,7 @@ fixtures = [
 				[
 					"Sales Invoice-custom_pdf_display_section",
 					"Sales Invoice-custom_pdf_display_currency",
+					"Sales Invoice-custom_pdf_display_exchange_rate",
 					"Sales Invoice-custom_pdf_display_vat_amount",
 					"Sales Invoice-custom_pdf_display_amount",
 				],

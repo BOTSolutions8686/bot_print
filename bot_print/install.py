@@ -1,9 +1,12 @@
+import re
+
 import frappe
-from frappe.utils import flt, nowdate
+
+TAX_MARKER = "<!-- BOT_PRINT_TAX_ROWS v2 -->"
+TAX_MARKER_ANY = "<!-- BOT_PRINT_TAX_ROWS"
 
 INCLUDE_MARKER = "<!-- BOT_PRINT_PDF_DISPLAY -->"
 INCLUDE = '{% include "templates/includes/bot_print/pdf_foreign_amount.html" ignore missing %}'
-TAX_MARKER = "<!-- BOT_PRINT_TAX_ROWS -->"
 
 ORIGINAL_TAX_ROWS = """    <tr>
         <td colspan="7" class="inc_size text-right bold">بيانات الضريبة المضافة بالريال</td>
@@ -29,7 +32,7 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
     <tr>
         <td colspan="7" class="inc_size text-right bold">
             {%- if show_pdf_ccy -%}
-                بيانات الضريبة المضافة بعملة {{ pdf_ccy }}
+                بيانات الضريبة المضافة ب<span dir="ltr">{{ pdf_ccy }}</span>
             {%- else -%}
                 بيانات الضريبة المضافة بالريال
             {%- endif -%}
@@ -39,13 +42,13 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
         <td colspan="2"></td>
         <td colspan="2" class="inc_size text-right bold" style="color: black !important;">
             {%- if show_pdf_ccy -%}
-                القيمة الخاضعة للضريبة ({{ pdf_ccy }})
+                القيمة الخاضعة للضريبة ب<span dir="ltr">{{ pdf_ccy }}</span>
             {%- else -%}
                 القيمة الخاضعة للضريبة بالريال
             {%- endif -%}
         </td>
         <td colspan="2" class="inc_size text-center bold">
-            {%- if show_pdf_ccy -%}{{ pdf_ccy }}{%- else -%}ريال{%- endif -%}
+            {%- if show_pdf_ccy -%}<span dir="ltr">{{ pdf_ccy }}</span>{%- else -%}ريال{%- endif -%}
         </td>
         <td class="inc_size text-right bold" style="color: black !important;">
             {%- if show_pdf_ccy and pdf_taxable -%}
@@ -59,13 +62,13 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
         <td colspan="2"></td>
         <td colspan="2" style="color: black !important;">
             {%- if show_pdf_ccy -%}
-                القيمة قيمة الضريبة المضافة ({{ pdf_ccy }}) %15
+                القيمة قيمة الضريبة المضافة ب<span dir="ltr">{{ pdf_ccy }}</span>%15
             {%- else -%}
                 القيمة قيمة الضريبة المضافة بالريال%15
             {%- endif -%}
         </td>
         <td colspan="2" class="inc_size text-center bold">
-            {%- if show_pdf_ccy -%}{{ pdf_ccy }}{%- else -%}ريال{%- endif -%}
+            {%- if show_pdf_ccy -%}<span dir="ltr">{{ pdf_ccy }}</span>{%- else -%}ريال{%- endif -%}
         </td>
         <td class="inc_size text-right bold" style="color: black !important;">
             {%- if show_pdf_ccy and pdf_vat -%}
@@ -79,7 +82,7 @@ REPLACEMENT_TAX_ROWS = """    """ + TAX_MARKER + """
 
 def after_migrate():
 	_ensure_pdf_section_collapsible()
-	_ensure_usd_sar_currency_exchange()
+	_ensure_pdf_exchange_rate_field()
 	_patch_multi_currency_formats()
 
 
@@ -89,43 +92,33 @@ def _ensure_pdf_section_collapsible():
 		frappe.db.set_value("Custom Field", name, "collapsible", 1, update_modified=False)
 
 
-def _ensure_usd_sar_currency_exchange():
-	"""ERPNext looks up USD→SAR (Price List). Site only had SAR→USD 3.75, so it threw."""
-	if not frappe.db.exists("DocType", "Currency Exchange"):
-		return
-
-	today = nowdate()
-	if frappe.db.exists(
-		"Currency Exchange",
-		{"from_currency": "USD", "to_currency": "SAR", "date": today},
-	):
-		return
-
-	src = frappe.get_all(
-		"Currency Exchange",
-		filters={"from_currency": "SAR", "to_currency": "USD"},
-		fields=["exchange_rate"],
-		order_by="date desc",
-		limit=1,
-	)
-	quoted = flt(src[0].exchange_rate) if src else 3.75
-	rate = quoted if quoted >= 1 else flt(1.0 / quoted, 9)
-	if not rate:
-		rate = 3.75
-
-	doc = frappe.get_doc(
-		{
-			"doctype": "Currency Exchange",
-			"date": today,
-			"from_currency": "USD",
-			"to_currency": "SAR",
-			"exchange_rate": rate,
-			"for_buying": 1,
-			"for_selling": 1,
-		}
-	)
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
+def _ensure_pdf_exchange_rate_field():
+	name = "Sales Invoice-custom_pdf_display_exchange_rate"
+	if not frappe.db.exists("Custom Field", name):
+		frappe.get_doc(
+			{
+				"doctype": "Custom Field",
+				"dt": "Sales Invoice",
+				"fieldname": "custom_pdf_display_exchange_rate",
+				"label": "Exchange Rate",
+				"fieldtype": "Float",
+				"insert_after": "custom_pdf_display_currency",
+				"precision": "9",
+				"allow_on_submit": 1,
+				"print_hide": 1,
+				"depends_on": "eval:doc.custom_pdf_display_currency",
+				"description": "1 PDF currency = [?] invoice currency (e.g. 1 USD = 3.75 SAR).",
+				"module": "BOT Print",
+			}
+		).insert(ignore_permissions=True)
+	if frappe.db.exists("Custom Field", "Sales Invoice-custom_pdf_display_vat_amount"):
+		frappe.db.set_value(
+			"Custom Field",
+			"Sales Invoice-custom_pdf_display_vat_amount",
+			"insert_after",
+			"custom_pdf_display_exchange_rate",
+			update_modified=False,
+		)
 
 
 def _patch_multi_currency_formats():
@@ -172,6 +165,17 @@ def _strip_old_include(html: str) -> str:
 def _replace_tax_rows(html: str) -> str:
 	if TAX_MARKER in html:
 		return html
+	if TAX_MARKER_ANY in html:
+		return _replace_existing_bot_block(html)
 	if ORIGINAL_TAX_ROWS in html:
 		return html.replace(ORIGINAL_TAX_ROWS, REPLACEMENT_TAX_ROWS, 1)
 	return html
+
+
+def _replace_existing_bot_block(html: str) -> str:
+	pattern = re.compile(
+		r"[ \t]*<!-- BOT_PRINT_TAX_ROWS.*?-->.*?(?:<tr\b.*?</tr>\s*){3}",
+		re.DOTALL,
+	)
+	updated, n = pattern.subn(REPLACEMENT_TAX_ROWS, html, count=1)
+	return updated if n else html
