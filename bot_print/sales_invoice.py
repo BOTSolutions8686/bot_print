@@ -1,6 +1,5 @@
 import frappe
-from frappe.utils import flt
-from erpnext.setup.utils import get_exchange_rate
+from frappe.utils import flt, nowdate
 
 USD_SAR_PEG = 3.75
 
@@ -59,14 +58,50 @@ def _company_per_display_rate(display_ccy, company_ccy, posting_date):
 	if display_ccy == company_ccy:
 		return 1.0
 
-	rate = 0.0
-	try:
-		rate = flt(get_exchange_rate(display_ccy, company_ccy, posting_date))
-	except Exception:
-		rate = 0.0
+	rate = _lookup_currency_exchange(display_ccy, company_ccy, posting_date)
+	if rate:
+		return rate
 
+	# Do not call erpnext get_exchange_rate: it throws if no Currency Exchange exists.
 	if display_ccy == "USD" and company_ccy == "SAR":
-		if not rate or abs(rate - 1.0) < 0.0001:
-			return USD_SAR_PEG
+		return USD_SAR_PEG
+	if display_ccy == "SAR" and company_ccy == "USD":
+		return flt(1.0 / USD_SAR_PEG, 9)
 
-	return rate
+	return 0.0
+
+
+def _lookup_currency_exchange(from_currency, to_currency, transaction_date):
+	if not from_currency or not to_currency:
+		return 0.0
+
+	date = transaction_date or nowdate()
+	rows = frappe.get_all(
+		"Currency Exchange",
+		filters={
+			"from_currency": from_currency,
+			"to_currency": to_currency,
+			"date": ["<=", date],
+		},
+		fields=["exchange_rate"],
+		order_by="date desc",
+		limit=1,
+	)
+	if rows and flt(rows[0].exchange_rate):
+		return flt(rows[0].exchange_rate)
+
+	reverse = frappe.get_all(
+		"Currency Exchange",
+		filters={
+			"from_currency": to_currency,
+			"to_currency": from_currency,
+			"date": ["<=", date],
+		},
+		fields=["exchange_rate"],
+		order_by="date desc",
+		limit=1,
+	)
+	if reverse and flt(reverse[0].exchange_rate):
+		return flt(1.0 / flt(reverse[0].exchange_rate), 9)
+
+	return 0.0
