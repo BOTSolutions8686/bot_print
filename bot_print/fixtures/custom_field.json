@@ -92,7 +92,7 @@
     "hidden": 0,
     "insert_after": "custom_pdf_display_vat_amount",
     "is_system_generated": 0,
-    "label": "PDF Display Total Amount",
+    "label": "PDF Display Taxable Amount",
     "module": "BOT Print",
     "name": "Sales Invoice-custom_pdf_display_amount",
     "no_copy": 0,
