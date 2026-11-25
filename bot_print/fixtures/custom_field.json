@@ -109,7 +109,7 @@
     "columns": 0,
     "default": null,
     "depends_on": "eval:doc.custom_pdf_display_currency",
-    "description": "Auto-filled: SAR taxable ÷ exchange rate. You can override.",
+    "description": "Auto-filled: SAR Total Before VAT (net) ÷ exchange rate. You can override.",
     "docstatus": 0,
     "doctype": "Custom Field",
     "dt": "Sales Invoice",

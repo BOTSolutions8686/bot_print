@@ -13,6 +13,12 @@ frappe.ui.form.on("Sales Invoice", {
 	base_total(frm) {
 		apply_pdf_amounts_from_rate(frm);
 	},
+	base_net_total(frm) {
+		apply_pdf_amounts_from_rate(frm);
+	},
+	discount_amount(frm) {
+		apply_pdf_amounts_from_rate(frm);
+	},
 	base_total_taxes_and_charges(frm) {
 		apply_pdf_amounts_from_rate(frm);
 	},
@@ -38,7 +44,7 @@ function apply_pdf_amounts_from_rate(frm) {
 	if (!rate || !frm.doc.custom_pdf_display_currency) {
 		return;
 	}
-	const taxable = flt(flt(frm.doc.base_total) / rate, 2);
+	const taxable = flt(flt(frm.doc.base_net_total) / rate, 2);
 	const vat = flt(flt(frm.doc.base_total_taxes_and_charges) / rate, 2);
 	if (flt(frm.doc.custom_pdf_display_amount) !== taxable) {
 		frm.set_value("custom_pdf_display_amount", taxable);

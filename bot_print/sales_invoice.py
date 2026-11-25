@@ -19,7 +19,7 @@ def set_pdf_foreign_amounts(doc, method=None):
 	if not rate:
 		return
 
-	doc.custom_pdf_display_amount = flt((doc.get("base_total") or 0) / rate, 2)
+	doc.custom_pdf_display_amount = flt((doc.get("base_net_total") or 0) / rate, 2)
 	doc.custom_pdf_display_vat_amount = flt(
 		(doc.get("base_total_taxes_and_charges") or 0) / rate, 2
 	)
