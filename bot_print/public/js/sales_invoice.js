@@ -40,12 +40,26 @@ function set_pdf_rate_label(frm) {
 }
 
 function apply_pdf_amounts_from_rate(frm) {
-	const rate = flt(frm.doc.custom_pdf_display_exchange_rate);
-	if (!rate || !frm.doc.custom_pdf_display_currency) {
+	const display = (frm.doc.custom_pdf_display_currency || "").trim();
+	if (!display) {
 		return;
 	}
-	const taxable = flt(flt(frm.doc.base_net_total) / rate, 2);
-	const vat = flt(flt(frm.doc.base_total_taxes_and_charges) / rate, 2);
+	const company = frm.doc.company_currency || "SAR";
+	const net_sar = flt(frm.doc.base_net_total);
+	const vat_sar = flt(frm.doc.base_total_taxes_and_charges);
+	let taxable;
+	let vat;
+	if (display === company) {
+		taxable = flt(net_sar, 2);
+		vat = flt(vat_sar, 2);
+	} else {
+		const rate = flt(frm.doc.custom_pdf_display_exchange_rate);
+		if (!rate) {
+			return;
+		}
+		taxable = flt(net_sar / rate, 2);
+		vat = flt(vat_sar / rate, 2);
+	}
 	if (flt(frm.doc.custom_pdf_display_amount) !== taxable) {
 		frm.set_value("custom_pdf_display_amount", taxable);
 	}

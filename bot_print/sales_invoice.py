@@ -16,13 +16,20 @@ def set_pdf_foreign_amounts(doc, method=None):
 		if rate:
 			doc.custom_pdf_display_exchange_rate = rate
 
+	net_sar = flt(doc.get("base_net_total") or 0)
+	vat_sar = flt(doc.get("base_total_taxes_and_charges") or 0)
+
+	if ccy == company_ccy:
+		doc.custom_pdf_display_amount = flt(net_sar, 2)
+		doc.custom_pdf_display_vat_amount = flt(vat_sar, 2)
+		return
+
 	if not rate:
 		return
 
-	doc.custom_pdf_display_amount = flt((doc.get("base_net_total") or 0) / rate, 2)
-	doc.custom_pdf_display_vat_amount = flt(
-		(doc.get("base_total_taxes_and_charges") or 0) / rate, 2
-	)
+	# 1 display unit = rate SAR (e.g. 1 USD = 3.75 SAR)
+	doc.custom_pdf_display_amount = flt(net_sar / rate, 2)
+	doc.custom_pdf_display_vat_amount = flt(vat_sar / rate, 2)
 
 
 @frappe.whitelist()
